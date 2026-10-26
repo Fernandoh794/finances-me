@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "chat": "LOG_LEVEL=warn tsx src/index.ts"
   },
   "repository": {
     "type": "git",

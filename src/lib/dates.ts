@@ -38,6 +38,33 @@ export function dayRange(startDate: string, endDate: string, timeZone = APP_TIME
   return { start: new Date(start.getTime()), end: new Date(end.getTime()) };
 }
 
+function toIso(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Soma (ou subtrai) dias de uma data "YYYY-MM-DD". */
+export function addDaysIso(iso: string, days: number): string {
+  const { year, month, day } = parseIsoDate(iso);
+  return toIso(new Date(Date.UTC(year, month - 1, day + days)));
+}
+
+/** Segunda-feira da semana de uma data "YYYY-MM-DD". */
+export function startOfWeekIso(iso: string): string {
+  const { year, month, day } = parseIsoDate(iso);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0 = domingo
+  return addDaysIso(iso, -((weekday + 6) % 7));
+}
+
+export function startOfMonthIso(iso: string): string {
+  parseIsoDate(iso);
+  return `${iso.slice(0, 7)}-01`;
+}
+
+export function endOfMonthIso(iso: string): string {
+  const { year, month } = parseIsoDate(iso);
+  return toIso(new Date(Date.UTC(year, month, 0)));
+}
+
 /** Data de hoje como "YYYY-MM-DD" no fuso da aplicação. */
 export function todayIso(now: Date = new Date(), timeZone = APP_TIME_ZONE): string {
   // en-CA formata como YYYY-MM-DD.

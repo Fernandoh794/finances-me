@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { dayRange, formatDateBR, formatDateTimeBR, todayIso } from './dates.js';
+import {
+  addDaysIso,
+  dayRange,
+  endOfMonthIso,
+  formatDateBR,
+  formatDateTimeBR,
+  startOfMonthIso,
+  startOfWeekIso,
+  todayIso,
+} from './dates.js';
 
 describe('dayRange', () => {
   it('cobre o dia inteiro em America/Sao_Paulo (UTC-3)', () => {
@@ -24,6 +33,24 @@ describe('dayRange', () => {
 
   it('rejeita intervalo invertido', () => {
     expect(() => dayRange('2026-10-27', '2026-10-26')).toThrow(/posterior/);
+  });
+});
+
+describe('aritmética de datas ISO', () => {
+  it('addDaysIso atravessa meses e anos', () => {
+    expect(addDaysIso('2026-10-31', 1)).toBe('2026-11-01');
+    expect(addDaysIso('2026-01-01', -1)).toBe('2025-12-31');
+  });
+
+  it('startOfWeekIso retorna a segunda-feira', () => {
+    expect(startOfWeekIso('2026-10-26')).toBe('2026-10-26'); // segunda
+    expect(startOfWeekIso('2026-11-01')).toBe('2026-10-26'); // domingo
+  });
+
+  it('início e fim do mês', () => {
+    expect(startOfMonthIso('2026-02-14')).toBe('2026-02-01');
+    expect(endOfMonthIso('2026-02-14')).toBe('2026-02-28');
+    expect(endOfMonthIso('2028-02-01')).toBe('2028-02-29');
   });
 });
 

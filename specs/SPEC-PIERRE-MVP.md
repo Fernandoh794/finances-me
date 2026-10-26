@@ -106,6 +106,18 @@ Toda data recebida pelas tools é `YYYY-MM-DD` interpretada em `America/Sao_Paul
 
 ## 4. Módulos do Sistema
 
+### 4.0. Modos de Execução e Interfaces
+
+Cada integração externa fica atrás de uma interface, com uma implementação offline usada até as credenciais existirem. O container (`src/app/container.ts`) escolhe a implementação conforme o `.env`:
+
+| Variável       | Offline (padrão)                     | Real                       | Interface                                                |
+| -------------- | ------------------------------------ | -------------------------- | -------------------------------------------------------- |
+| `LLM_PROVIDER` | `fake`: roteador por palavras-chave  | `gemini`                   | `LlmProvider` (`src/agent/llm/types.ts`)                 |
+| `DATA_SOURCE`  | `demo`: memória + dados fictícios    | `live`: Firestore + Pluggy | `AccountRepository`, `TransactionRepository`, `BankSync` |
+| `CHANNEL`      | `console`: terminal (`npm run chat`) | `whatsapp`: Baileys        | `Channel` (`src/channels/types.ts`)                      |
+
+Variáveis de credencial só são exigidas quando o modo real correspondente está ativo. Fluxo de uma mensagem: `Channel` → `MessageHandler` (fila, histórico, erro amigável) → `Agent` (loop de tools) → tools → repositórios.
+
 ### 4.1. Ingestor Pluggy (`src/services/pluggy/`)
 
 - Gerenciamento de token: `POST https://api.pluggy.ai/auth` enviando `clientId` e `clientSecret`. Armazena `apiKey` em memória com controle de expiração (renova antes de expirar e em resposta 401).
@@ -119,7 +131,9 @@ Toda data recebida pelas tools é `YYYY-MM-DD` interpretada em `America/Sao_Paul
 - Lock em memória: duas syncs nunca rodam ao mesmo tempo (cron + comando manual).
 - Retorna um resumo `{ accounts, newOrUpdatedTransactions, errors }`.
 
-### 4.3. Mecanismo Baileys (`src/services/whatsapp/`)
+### 4.3. Mecanismo Baileys (`src/channels/whatsapp/`)
+
+Implementa a interface `Channel`; fila e tratamento de erro ficam no `MessageHandler`, compartilhado com o canal console.
 
 - Inicializa conexão utilizando `useMultiFileAuthState('.baileys_auth')`.
 - Exibe QR Code no terminal (`qrcode-terminal`) caso precise autenticar.
@@ -134,13 +148,13 @@ Toda data recebida pelas tools é `YYYY-MM-DD` interpretada em `America/Sao_Paul
 
 ### 4.4. Agente Conversacional & Tools (`src/agent/`)
 
-- Modelo: definido por `GEMINI_MODEL` (usar um modelo Flash atual e com suporte a function calling).
+- Modelo: definido por `GEMINI_MODEL` (usar um modelo Flash atual e com suporte a function calling). O agente depende só de `LlmProvider`; no modo `fake`, um roteador por palavras-chave chama as mesmas tools e formata a resposta.
 - Histórico: mantém as últimas N trocas (padrão 10) em memória para permitir perguntas de seguimento ("e no mês passado?"). Reinicia ao reiniciar o processo.
 - Limite de iterações do loop de tools (padrão 5) para evitar loops infinitos.
 - Tools Registradas:
   1. `get_balances`: Retorna saldos de todas as contas e total consolidado (contas separadas de faturas de cartão).
   2. `get_expenses_summary`: Recebe `{ startDate: string, endDate: string, category?: string }`. Consulta apenas `isExpense = true` e retorna soma total, agrupamento por categoria e quantidade de transações.
-  3. `get_recent_transactions`: Recebe `{ limit?: number }` (padrão 10, máx. 50). Retorna os últimos lançamentos formatados com data, descrição, valor e banco.
+  3. `get_recent_transactions`: Recebe `{ limit?: number, onlyExpenses?: boolean }` (padrão 10, máx. 50; `onlyExpenses` padrão `false`). Retorna os últimos lançamentos formatados com data, descrição, valor, banco e categoria.
   4. `sync_bank_data`: Aciona o pipeline de sincronização manual e retorna o resumo da sync.
 - Persona do Prompt: Assistente financeiro sênior, direto, analítico e resolutivo. Responde sempre em Português do Brasil com valores em `R$ 0,00` e destaques em negrito (formatação do WhatsApp: `*negrito*`). Inclui a data/hora atual em `America/Sao_Paulo`. Se a pergunta não puder ser respondida com as tools, diz isso em vez de inventar.
 

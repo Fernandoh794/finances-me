@@ -1,10 +1,6 @@
 # Plano de Implementação: MVP Agente Financeiro
 
-- [ ] **Fase 0: Validação de Contas e Dados**
-  - [ ] 0.1 Criar conta na Pluggy, conectar os bancos no MeuPluggy e anotar os `itemId`s.
-  - [ ] 0.2 Criar projeto Firebase + service account; criar chave da API Gemini.
-  - [ ] 0.3 Script descartável que baixa contas e transações reais da Pluggy e salva fixtures anonimizadas em `test/fixtures/` (confirmar convenção de sinal de conta vs. cartão e categorias de fatura/transferência).
-  - [ ] 0.4 Definir o número de WhatsApp do bot (número dedicado recomendado).
+Estratégia: construir tudo atrás de interfaces e rodar primeiro no console com dados fictícios e IA offline. As integrações reais (Gemini, Pluggy/Firestore, WhatsApp) são plugadas no fim, trocando apenas o modo no `.env`.
 
 - [x] **Fase 1: Fundação do Projeto & Configuração**
   - [x] 1.1 Iniciar projeto Node.js (`package.json`) com TypeScript, `tsx`, ESLint, Prettier e Vitest.
@@ -13,28 +9,39 @@
   - [x] 1.4 Configurar logger estruturado (`pino`) com redação de campos sensíveis.
   - [x] 1.5 Utilitários em `src/lib/`: dinheiro em centavos, formatação BRL, intervalos de data em `America/Sao_Paulo` (com testes).
 
-- [ ] **Fase 2: Cliente Pluggy & Repositório Firestore**
-  - [ ] 2.1 Criar `PluggyClient` com autenticação automática, renovação de `apiKey`, paginação e retry.
-  - [ ] 2.2 Criar repositório `AccountRepository` para salvar/atualizar contas na coleção `accounts`.
-  - [ ] 2.3 Criar repositório `TransactionRepository` para escrita idempotente na coleção `transactions` e queries analíticas (soma por período, agregação por categoria).
-  - [ ] 2.4 Implementar `normalizeTransaction` e `classifyExpense` como funções puras, testadas contra as fixtures da Fase 0.
-  - [ ] 2.5 Criar `SyncService` unindo busca na Pluggy e persistência no Firestore, com janela de sobreposição, `sync_state` e lock.
-  - [ ] 2.6 Criar `firestore.indexes.json` e testar repositórios no Firebase Emulator.
+- [x] **Fase 2: Núcleo Offline (sem credenciais)**
+  - [x] 2.1 Modos de execução no env (`LLM_PROVIDER`, `DATA_SOURCE`, `CHANNEL`) com chaves exigidas só no modo correspondente.
+  - [x] 2.2 Tipos de domínio e interfaces `AccountRepository` / `TransactionRepository` / `BankSync`.
+  - [x] 2.3 Repositórios em memória + dados fictícios determinísticos (incluindo fatura e transferências, que não são gasto).
+  - [x] 2.4 Agregações puras (`summarizeExpenses`, `summarizeBalances`).
+  - [x] 2.5 Tools (`get_balances`, `get_expenses_summary`, `get_recent_transactions`, `sync_bank_data`) validadas por Zod, com JSON Schema gerado.
+  - [x] 2.6 Loop do agente provider-agnóstico (limite de iterações, erros de tool devolvidos ao LLM).
+  - [x] 2.7 `FakeLlmProvider` por palavras-chave para desenvolver sem chave de IA.
+  - [x] 2.8 `MessageHandler` (histórico curto, fila por remetente, erro amigável) e interface `Channel`.
+  - [x] 2.9 Canal console (`npm run chat`).
 
-- [ ] **Fase 3: Camada de IA & Function Calling**
-  - [ ] 3.1 Declarar especificações das tools (`get_balances`, `get_expenses_summary`, `get_recent_transactions`, `sync_bank_data`) com parâmetros validados por Zod.
-  - [ ] 3.2 Implementar resolvers locais executando as queries correspondentes no Firestore e SyncService.
-  - [ ] 3.3 Montar o loop do agente conversacional: recebe texto -> avalia se precisa de tool -> executa tool -> gera resposta final contextualizada (limite de iterações + histórico curto).
-  - [ ] 3.4 CLI local (`npm run chat`) para conversar com o agente pelo terminal, sem WhatsApp.
+- [ ] **Fase 3: Integração com Gemini** _(requer `GEMINI_API_KEY`)_
+  - [ ] 3.1 `GeminiLlmProvider` implementando `LlmProvider` com `@google/genai` (mapear `ChatMessage`/`ToolSpec` ↔ formato do SDK).
+  - [ ] 3.2 Validar no console as perguntas dos critérios de aceite e perguntas livres; ajustar prompt.
+  - [ ] 3.3 Testes do adapter com SDK mockado.
 
-- [ ] **Fase 4: Conexão WhatsApp com Baileys**
-  - [ ] 4.1 Implementar inicialização do socket Baileys com suporte a QR Code no terminal e persistência em `.baileys_auth/`.
-  - [ ] 4.2 Configurar reconnect automático em caso de queda de conexão (exceto `loggedOut`).
-  - [ ] 4.3 Implementar listener de `messages.upsert` com filtros de segurança (dono/LID, grupos, broadcast, `fromMe`, dedupe) e testes unitários do filtro.
+- [ ] **Fase 4: Dados Reais — Pluggy & Firestore** _(requer contas Pluggy e Firebase)_
+  - [ ] 4.0 Conta Pluggy + MeuPluggy (`itemId`s), projeto Firebase + service account, e script que salva fixtures anonimizadas em `test/fixtures/` (confirmar sinal de conta vs. cartão e categorias de fatura/transferência).
+  - [ ] 4.1 `PluggyClient` com autenticação automática, renovação de `apiKey`, paginação e retry.
+  - [ ] 4.2 `FirestoreAccountRepository` e `FirestoreTransactionRepository` implementando as interfaces (upsert idempotente pelo ID da Pluggy).
+  - [ ] 4.3 `normalizeTransaction` e `classifyExpense` como funções puras, testadas contra as fixtures.
+  - [ ] 4.4 `PluggyBankSync` com janela de sobreposição, `sync_state` e lock.
+  - [ ] 4.5 `firestore.indexes.json` e testes dos repositórios no Firebase Emulator.
+  - [ ] 4.6 Ligar `DATA_SOURCE=live` no container.
 
-- [ ] **Fase 5: Integração Ponta a Ponta & Rotinas**
-  - [ ] 5.1 Conectar o handler do Baileys ao loop do Agente de IA (fila por conversa + "digitando...").
-  - [ ] 5.2 Configurar rotina cron (`node-cron`, expressão em `SYNC_CRON`) para auto-sync da Pluggy 2 vezes ao dia.
-  - [ ] 5.3 Shutdown gracioso (SIGINT/SIGTERM) fechando socket e cron.
-  - [ ] 5.4 Testar fluxo real com os critérios de aceite da spec: _"Qual meu saldo atual?"_, _"Quanto gastei essa semana?"_ e _"Quais foram meus últimos 5 gastos?"_.
-  - [ ] 5.5 Definir onde o processo roda 24/7 (VPS/servidor doméstico com `pm2` ou Docker) e documentar no README.
+- [ ] **Fase 5: Canal WhatsApp com Baileys** _(requer número do bot)_
+  - [ ] 5.1 `WhatsAppChannel` implementando `Channel`: socket Baileys, QR Code no terminal, persistência em `.baileys_auth/`.
+  - [ ] 5.2 Reconnect automático em queda de conexão (exceto `loggedOut`).
+  - [ ] 5.3 Filtros de segurança (dono/LID, grupos, broadcast, `fromMe`, dedupe) com testes unitários; "digitando..." durante o processamento.
+  - [ ] 5.4 Ligar `CHANNEL=whatsapp` no container.
+
+- [ ] **Fase 6: Rotinas & Produção**
+  - [ ] 6.1 Rotina cron (`node-cron`, expressão em `SYNC_CRON`) para auto-sync da Pluggy 2 vezes ao dia.
+  - [ ] 6.2 Shutdown gracioso (SIGINT/SIGTERM) fechando socket e cron.
+  - [ ] 6.3 Testar fluxo real com os critérios de aceite da spec: _"Qual meu saldo atual?"_, _"Quanto gastei essa semana?"_ e _"Quais foram meus últimos 5 gastos?"_.
+  - [ ] 6.4 Definir onde o processo roda 24/7 (VPS/servidor doméstico com `pm2` ou Docker) e documentar no README.

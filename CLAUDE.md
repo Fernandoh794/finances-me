@@ -18,12 +18,16 @@ Especificação: `specs/SPEC-PIERRE-MVP.md` · Plano: `specs/PLAN.md` (marque os
 
 - **Arquitetura em Camadas:**
   - `src/config/`: Variáveis de ambiente validadas com Zod e instâncias de clientes base.
+  - `src/domain/`: Tipos de domínio (`Account`, `Transaction`), independentes de Firestore/Pluggy.
+  - `src/repositories/`: Interfaces de repositório; `memory/` (demo) e `firestore/` (real) as implementam.
   - `src/services/pluggy/`: Cliente de autenticação e consumo da API Pluggy.
-  - `src/services/firebase/`: Repositórios Firestore (queries de accounts e transactions).
-  - `src/services/sync/`: Orquestra Pluggy → normalização → Firestore.
-  - `src/services/whatsapp/`: Conexão Baileys, manipulação de socket e handlers de eventos.
-  - `src/agent/`: Definição de tools, loop de function calling e prompts de sistema.
-  - `src/lib/`: Utilitários puros (dinheiro, datas/fuso, formatação BRL).
+  - `src/services/sync/`: Interface `BankSync` e implementações (demo e Pluggy → normalização → repositórios).
+  - `src/services/analytics/`: Agregações puras (somas, agrupamentos) usadas pelas tools.
+  - `src/agent/`: Loop do agente, prompt, tools e provedores de LLM (`llm/fake`, `llm/gemini`).
+  - `src/channels/`: Interface `Channel`; `console/` e `whatsapp/` (Baileys) a implementam.
+  - `src/app/`: `MessageHandler` e `container.ts` (único lugar que escolhe implementações pelo env).
+  - `src/lib/`: Utilitários puros (dinheiro, datas/fuso, formatação BRL, texto).
+- **Modos offline:** `LLM_PROVIDER=fake`, `DATA_SOURCE=demo` e `CHANNEL=console` são os padrões e não exigem credenciais. Toda integração nova entra como implementação de uma interface existente, ligada no container — nunca acoplada direto ao agente ou ao canal.
 - **Idempotência Obrigatória:** Transações sincronizadas da Pluggy DEVEM usar o ID original da Pluggy como document ID no Firestore (`transactions/{pluggy_transaction_id}`). Nunca gere IDs aleatórios para transações bancárias. Escritas são sempre upsert (`set(..., { merge: true })`).
 - **Zero Alucinação Matemática:** O LLM NUNCA deve calcular somatórios de gastos de cabeça. Toda consulta quantitativa deve disparar uma tool que executa a agregação em código. As tools devolvem os valores já formatados em `R$` para o modelo apenas repetir.
 - **Dinheiro em centavos:** Valores monetários são persistidos e somados como inteiros (`amountCents`). Conversão para reais só na borda (formatação de saída). Nunca some `number` em ponto flutuante.
@@ -40,5 +44,6 @@ Especificação: `specs/SPEC-PIERRE-MVP.md` · Plano: `specs/PLAN.md` (marque os
 
 - Build: `npm run build`
 - Dev: `npm run dev`
+- Chat no console (modo offline): `npm run chat`
 - Testes: `npm test`
 - Lint: `npm run lint`
